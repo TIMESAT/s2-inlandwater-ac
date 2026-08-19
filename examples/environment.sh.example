@@ -1,0 +1,9 @@
+# ACOLITE source checkout and its Python environment
+export ACOLITE_HOME=/path/to/acolite
+export ACOLITE_PYTHON=/path/to/acolite-environment/bin/python
+
+# ESA SNAP Graph Processing Tool (never use macOS /usr/sbin/gpt)
+export SNAP_GPT=/Applications/snap/bin/gpt
+
+# Python interpreter from the POLYMER environment
+export POLYMER_PYTHON=/path/to/polymer-environment/bin/python
