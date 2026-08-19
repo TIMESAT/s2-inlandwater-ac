@@ -1,5 +1,6 @@
 .DS_Store
 .venv/
+.external/
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -9,4 +10,4 @@ htmlcov/
 build/
 dist/
 outputs/
-
+outputs-vombsjon/

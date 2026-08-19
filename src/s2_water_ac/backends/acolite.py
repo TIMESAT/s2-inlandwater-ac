@@ -11,14 +11,27 @@ class AcoliteBackend(Backend):
     name = "acolite"
     summary = "ACOLITE Dark Spectrum Fitting，面向沿海和内陆水体"
 
+    @staticmethod
+    def _project_root() -> Path:
+        return Path(__file__).resolve().parents[3]
+
+    def _python(self) -> str:
+        configured = os.environ.get("ACOLITE_PYTHON")
+        if configured:
+            return configured
+        local = self._project_root() / ".external" / "envs" / "acolite" / "bin" / "python"
+        return str(local) if local.is_file() else sys.executable
+
     def _resolve(self, executable: Optional[str]) -> Optional[Path]:
         if executable:
             return resolve_program(executable)
         home = os.environ.get("ACOLITE_HOME")
+        local = self._project_root() / ".external" / "acolite" / "launch_acolite.py"
         return first_existing(
             (
                 env_path("ACOLITE_LAUNCHER"),
                 Path(home) / "launch_acolite.py" if home else None,
+                local,
                 resolve_program("acolite"),
             )
         )
@@ -34,7 +47,7 @@ class AcoliteBackend(Backend):
             )
         detail = "已找到 ACOLITE 启动器"
         if resolved.suffix == ".py":
-            detail += "；Python={}".format(os.environ.get("ACOLITE_PYTHON", sys.executable))
+            detail += "；Python={}".format(self._python())
         return BackendStatus(self.name, True, resolved, detail)
 
     def prepare(
@@ -72,8 +85,7 @@ class AcoliteBackend(Backend):
             )
 
         if launcher.suffix == ".py":
-            python = os.environ.get("ACOLITE_PYTHON", sys.executable)
-            argv = [python, str(launcher)]
+            argv = [self._python(), str(launcher)]
         else:
             argv = [str(launcher)]
         argv.extend(

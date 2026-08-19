@@ -38,6 +38,11 @@ s2-water-ac doctor --backend acolite
 
 也可用 `ACOLITE_LAUNCHER=/path/to/launch_acolite.py`。ACOLITE 首次运行可能联网下载 LUT。
 
+如果 ACOLITE 源码和环境分别安装在项目内的 `.external/acolite` 与
+`.external/envs/acolite`，统一入口会自动发现它们，无需每次设置环境变量。
+在线 ancillary 数据需要 Earthdata 凭据；没有凭据时 ACOLITE 会退回默认大气参数。
+可配置 `.netrc`，或在明确接受默认值时传入 `--set ancillary_data=False`。
+
 ### SNAP C2RCC
 
 安装 ESA SNAP 及 Optical Toolbox/C2RCC，并把 `SNAP_GPT` 指向 SNAP Graph Processing Tool：
@@ -127,6 +132,42 @@ s2-water-ac batch \
 ```
 
 默认单个产品失败后继续，并在最后输出 JSON 汇总。添加 `--fail-fast` 可在首次失败时停止。
+
+## Linux/HPC 上处理 Vombsjön 全部影像
+
+Linux 服务器上的示例数据目录为：
+
+```text
+/projects/eko/fs7/pers/ZC/TWIN_water/S2L1C/T33UVB
+```
+
+macOS 创建的 Python/conda 环境不能直接复制到 Linux；需要在 Linux 上重新创建
+ACOLITE 环境。完整步骤（包括 ROI 上传、安装、单景验证、全量批处理和断点续跑）见
+[`docs/linux-hpc.md`](docs/linux-hpc.md)。仓库同时提供可直接提交的 Slurm 示例：
+[`examples/run_acolite_vombsjon.slurm`](examples/run_acolite_vombsjon.slurm)。
+
+环境准备完成后，可直接运行：
+
+```bash
+BASE=/projects/eko/fs7/pers/ZC/TWIN_water
+APP="$BASE/s2-inlandwater-ac"
+ACENV="$APP/.external/envs/acolite"
+
+export ACOLITE_HOME="$APP/.external/acolite"
+export ACOLITE_PYTHON="$ACENV/bin/python"
+
+"$ACENV/bin/s2-water-ac" batch "$BASE/S2L1C/T33UVB" \
+  --backend acolite \
+  --profile inland \
+  --resolution 20 \
+  --output "$BASE/ACOLITE_VOMBSJON" \
+  --set "polygon=$BASE/vombsjon.geojson" \
+  --set polygon_clip=True \
+  --set ancillary_data=False
+```
+
+已有成功 `run.json` 的产品会自动跳过，因此任务中断后可安全地再次运行同一命令。
+不要为断点续跑添加 `--force`。
 
 ## 预演与结果结构
 
