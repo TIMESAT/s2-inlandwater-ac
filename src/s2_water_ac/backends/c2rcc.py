@@ -112,26 +112,39 @@ def _boolean(value: str, name: str) -> bool:
 def _write_roi_graph(
     path: Path,
     parameters: Dict[str, str],
-    geo_region: str,
+    resolution: int,
+    geo_region: Optional[str],
 ) -> None:
     graph = ET.Element("graph", {"id": "c2rcc-roi"})
     ET.SubElement(graph, "version").text = "1.0"
 
+    resampling = ET.SubElement(graph, "node", {"id": "s2-resampling"})
+    ET.SubElement(resampling, "operator").text = "S2Resampling"
+    resampling_sources = ET.SubElement(resampling, "sources")
+    ET.SubElement(resampling_sources, "sourceProduct").text = "${sourceProduct}"
+    resampling_parameters = ET.SubElement(resampling, "parameters")
+    ET.SubElement(resampling_parameters, "resolution").text = str(resolution)
+    ET.SubElement(resampling_parameters, "upsampling").text = "Bilinear"
+    ET.SubElement(resampling_parameters, "downsampling").text = "Mean"
+    ET.SubElement(resampling_parameters, "flagDownsampling").text = "First"
+    ET.SubElement(resampling_parameters, "resampleOnPyramidLevels").text = "false"
+
     c2rcc = ET.SubElement(graph, "node", {"id": "c2rcc"})
     ET.SubElement(c2rcc, "operator").text = "c2rcc.msi"
     sources = ET.SubElement(c2rcc, "sources")
-    ET.SubElement(sources, "sourceProduct").text = "${sourceProduct}"
+    ET.SubElement(sources, "sourceProduct", {"refid": "s2-resampling"})
     processor_parameters = ET.SubElement(c2rcc, "parameters")
     for key, value in parameters.items():
         ET.SubElement(processor_parameters, key).text = value
 
-    subset = ET.SubElement(graph, "node", {"id": "subset-roi"})
-    ET.SubElement(subset, "operator").text = "Subset"
-    subset_sources = ET.SubElement(subset, "sources")
-    ET.SubElement(subset_sources, "sourceProduct", {"refid": "c2rcc"})
-    subset_parameters = ET.SubElement(subset, "parameters")
-    ET.SubElement(subset_parameters, "geoRegion").text = geo_region
-    ET.SubElement(subset_parameters, "copyMetadata").text = "true"
+    if geo_region is not None:
+        subset = ET.SubElement(graph, "node", {"id": "subset-roi"})
+        ET.SubElement(subset, "operator").text = "Subset"
+        subset_sources = ET.SubElement(subset, "sources")
+        ET.SubElement(subset_sources, "sourceProduct", {"refid": "c2rcc"})
+        subset_parameters = ET.SubElement(subset, "parameters")
+        ET.SubElement(subset_parameters, "geoRegion").text = geo_region
+        ET.SubElement(subset_parameters, "copyMetadata").text = "true"
 
     ET.indent(graph, space="  ")
     path.write_text(
@@ -198,7 +211,6 @@ class C2rccBackend(Backend):
         executable: Optional[str],
         write_files: bool,
     ) -> PreparedCommand:
-        del resolution
         validate_parameters(parameters)
         gpt = self.require_executable(executable)
         source = input_path / "MTD_MSIL1C.xml" if input_path.is_dir() else input_path
@@ -221,45 +233,39 @@ class C2rccBackend(Backend):
         generated_files: List[Path] = []
         notes = [
             "inland profile 使用 C2X-COMPLEX-Nets；输出反射率为 Rrs。",
-            "C2RCC 输出网格由 SNAP 产品定义，统一入口的 --resolution 对此后端不生效。",
+            "S2Resampling 将 MSI 多分辨率波段统一到 {} m（Bilinear/Mean）。".format(
+                resolution
+            ),
         ]
 
+        geo_region: Optional[str] = None
         if polygon_value and polygon_clip:
             polygon = Path(polygon_value).expanduser().resolve()
             if not polygon.is_file():
                 raise ConfigurationError("ROI GeoJSON 不存在：{}".format(polygon))
             geo_region = _geojson_wkt(polygon)
-            graph_path = output_dir / "c2rcc-roi.xml"
-            if write_files:
-                output_dir.mkdir(parents=True, exist_ok=True)
-                _write_roi_graph(graph_path, defaults, geo_region)
-            argv = [
-                str(gpt),
-                str(graph_path),
-                "-SsourceProduct={}".format(source),
-                "-t",
-                str(target),
-                "-f",
-                "BEAM-DIMAP",
-            ]
-            generated_files.append(graph_path)
             notes.extend(
                 [
-                    "先对原始 L1C 执行 C2RCC，再使用 polygon 裁到同一 ROI 的外接范围。",
+                    "先统一 L1C 栅格并执行 C2RCC，再使用 polygon 裁到同一 ROI 的外接范围。",
                     "SNAP 原生栅格保持矩形；精确多边形外像元需在标准化/分析阶段用同一 GeoJSON 掩膜。",
                 ]
             )
-        else:
-            argv = [
-                str(gpt),
-                "c2rcc.msi",
-                "-SsourceProduct={}".format(source),
-                "-t",
-                str(target),
-                "-f",
-                "BEAM-DIMAP",
-            ]
-            argv.extend("-P{}={}".format(key, value) for key, value in defaults.items())
+
+        graph_name = "c2rcc-roi.xml" if geo_region is not None else "c2rcc.xml"
+        graph_path = output_dir / graph_name
+        if write_files:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            _write_roi_graph(graph_path, defaults, resolution, geo_region)
+        argv = [
+            str(gpt),
+            str(graph_path),
+            "-SsourceProduct={}".format(source),
+            "-t",
+            str(target),
+            "-f",
+            "BEAM-DIMAP",
+        ]
+        generated_files.append(graph_path)
 
         return PreparedCommand(
             argv=argv,

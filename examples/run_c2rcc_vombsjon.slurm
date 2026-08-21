@@ -40,6 +40,7 @@ mkdir -p "$OUT"
 "$RUNNER" batch "$DATA" \
   --backend c2rcc \
   --profile inland \
+  --resolution 20 \
   --output "$OUT" \
   --set "polygon=${ROI}" \
   --set polygon_clip=true

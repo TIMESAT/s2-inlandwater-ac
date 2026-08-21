@@ -7,7 +7,7 @@
 | 后端 | 默认策略 | 典型用途 | 输出 |
 |---|---|---|---|
 | `acolite` | DSF，20 m，生成 `Rrs_*` | 浑浊、富营养化内陆水体；推荐首选 | ACOLITE NetCDF + GeoTIFF |
-| `c2rcc` | `C2X-COMPLEX-Nets`，`outputAsRrs=true` | 光学复杂内陆水体，神经网络反演 | SNAP BEAM-DIMAP |
+| `c2rcc` | 20 m，`C2X-COMPLEX-Nets`，`outputAsRrs=true` | 光学复杂内陆水体，神经网络反演 | SNAP BEAM-DIMAP |
 | `ocsmart` | `rrs,chl`，MSI 固定 60 m | 沿海/内陆复杂水体，科学机器学习反演 | HDF5 |
 | `polymer` | 20 m，优先读取 SAFE 内嵌 ECMWF | 太阳耀斑明显的水体 | NetCDF |
 
@@ -121,14 +121,15 @@ s2-water-ac run "$PRODUCT" \
 s2-water-ac run "$PRODUCT" \
   --backend c2rcc \
   --output ./outputs \
+  --resolution 20 \
   --set polygon=/path/to/roi.geojson \
   --set polygon_clip=true \
   --set netSet=C2X-COMPLEX-Nets \
   --set outputUncertainties=true
 ```
 
-C2RCC 先在完整 L1C 产品上执行，再将结果裁到 GeoJSON 的外接范围，避免预裁剪破坏
-处理器依赖的 Sentinel-2 元数据。精确的多边形像元掩膜应在标准化或统计阶段应用。
+C2RCC graph 先用官方 `S2Resampling` 将多分辨率 L1C 统一到指定分辨率，再执行
+C2RCC，最后裁到 GeoJSON 的外接范围。精确的多边形像元掩膜应在标准化或统计阶段应用。
 
 运行 POLYMER：
 
@@ -233,10 +234,10 @@ outputs/
 
 ## 参数约定
 
-- `--set KEY=VALUE` 可重复。ACOLITE 参数原样写入 settings；C2RCC 参数转为 SNAP `-PKEY=VALUE`。
+- `--set KEY=VALUE` 可重复。ACOLITE 参数原样写入 settings；C2RCC 参数写入可追溯的 SNAP graph XML。
 - POLYMER 当前支持 `ancillary`、`multiprocessing`、`blocksize`、`sline`、`eline`、`scol`、`ecol`、`altitude` 和 `use_srf`。
 - OC-SMART 支持官方输入项 `l2_prod`、角度限制、三种子区域参数和 `block_size`；`l1b_path`/`l2_path` 由统一入口管理，不能覆盖。
-- `--resolution` 作用于 ACOLITE 和 POLYMER。C2RCC 的输出网格由 SNAP/C2RCC 产品定义；OC-SMART v2.2 的 MSI 输出固定为 60 m。
+- `--resolution` 作用于 ACOLITE、C2RCC 的 `S2Resampling` 和 POLYMER；OC-SMART v2.2 的 MSI 输出固定为 60 m。
 - `.SAFE.zip` 可直接交给 ACOLITE/C2RCC；POLYMER 和 OC-SMART 运行时会安全解压到临时目录并在结束后清理。
 
 ## 测试

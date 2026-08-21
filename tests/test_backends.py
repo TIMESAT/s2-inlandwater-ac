@@ -39,12 +39,22 @@ class BackendTests(unittest.TestCase):
         self.assertIn("--cli", prepared.argv)
 
     def test_c2rcc_uses_complex_nets_and_metadata_input(self) -> None:
+        output = self.root / "output"
         prepared = C2rccBackend().prepare(
-            self.product, self.safe, self.root / "output", "inland", 20,
-            {}, self.executable, False,
+            self.product, self.safe, output, "inland", 20,
+            {}, self.executable, True,
         )
-        self.assertIn("-PnetSet=C2X-COMPLEX-Nets", prepared.argv)
-        self.assertIn("-PoutputAsRrs=true", prepared.argv)
+        graph = (output / "c2rcc.xml").read_text(encoding="utf-8")
+        self.assertIn("<operator>S2Resampling</operator>", graph)
+        self.assertIn("<resolution>20</resolution>", graph)
+        self.assertIn("<upsampling>Bilinear</upsampling>", graph)
+        self.assertIn("<downsampling>Mean</downsampling>", graph)
+        self.assertIn("<netSet>C2X-COMPLEX-Nets</netSet>", graph)
+        self.assertIn("<outputAsRrs>true</outputAsRrs>", graph)
+        self.assertLess(
+            graph.index("<operator>S2Resampling</operator>"),
+            graph.index("<operator>c2rcc.msi</operator>"),
+        )
         source = next(value for value in prepared.argv if value.startswith("-SsourceProduct="))
         self.assertTrue(source.endswith("/MTD_MSIL1C.xml"))
 
@@ -85,14 +95,22 @@ class BackendTests(unittest.TestCase):
         graph_path = output / "c2rcc-roi.xml"
         graph = graph_path.read_text(encoding="utf-8")
         self.assertEqual(prepared.argv[1], str(graph_path))
-        self.assertLess(graph.index("<operator>c2rcc.msi</operator>"), graph.index("<operator>Subset</operator>"))
+        self.assertLess(
+            graph.index("<operator>S2Resampling</operator>"),
+            graph.index("<operator>c2rcc.msi</operator>"),
+        )
+        self.assertLess(
+            graph.index("<operator>c2rcc.msi</operator>"),
+            graph.index("<operator>Subset</operator>"),
+        )
         self.assertIn("<sourceProduct>${sourceProduct}</sourceProduct>", graph)
+        self.assertIn('<sourceProduct refid="s2-resampling"', graph)
         source = next(value for value in prepared.argv if value.startswith("-SsourceProduct="))
         self.assertTrue(source.endswith("/MTD_MSIL1C.xml"))
         self.assertIn("<geoRegion>POLYGON ((13.5 55.6", graph)
         self.assertIn("<netSet>C2X-COMPLEX-Nets</netSet>", graph)
         self.assertEqual(prepared.generated_files, [graph_path])
-        self.assertTrue(any("原始 L1C" in note for note in prepared.notes))
+        self.assertTrue(any("统一 L1C 栅格" in note for note in prepared.notes))
 
     def test_c2rcc_roi_dry_run_does_not_write_graph(self) -> None:
         polygon = self.root / "lake.geojson"
