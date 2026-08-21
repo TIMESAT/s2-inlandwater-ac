@@ -36,7 +36,7 @@ def _manifest_base(
     parameters: Dict[str, str],
     prepared: PreparedCommand,
 ) -> Dict[str, object]:
-    return {
+    manifest: Dict[str, object] = {
         "schema_version": 1,
         "product": product.to_dict(),
         "backend": backend_name,
@@ -51,6 +51,9 @@ def _manifest_base(
         "generated_files": [str(path) for path in prepared.generated_files],
         "notes": prepared.notes,
     }
+    if prepared.working_directory is not None:
+        manifest["working_directory"] = str(prepared.working_directory)
+    return manifest
 
 
 def _verify_outputs(prepared: PreparedCommand, output_dir: Path) -> List[str]:
@@ -74,7 +77,7 @@ def _execute(prepared: PreparedCommand, output_dir: Path, manifest: Dict[str, ob
         with log_path.open("w", encoding="utf-8") as log:
             process = subprocess.Popen(
                 prepared.argv,
-                cwd=str(output_dir),
+                cwd=str(prepared.working_directory or output_dir),
                 env=environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,

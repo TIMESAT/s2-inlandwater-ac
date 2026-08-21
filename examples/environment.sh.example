@@ -4,6 +4,13 @@ export ACOLITE_PYTHON=/path/to/acolite-environment/bin/python
 
 # ESA SNAP Graph Processing Tool (never use macOS /usr/sbin/gpt)
 export SNAP_GPT=/Applications/snap/bin/gpt
+# Optional Linux installation root; SNAP_GPT takes precedence
+# export SNAP_HOME=/path/to/esa-snap
 
 # Python interpreter from the POLYMER environment
 export POLYMER_PYTHON=/path/to/polymer-environment/bin/python
+
+# OC-SMART official package, its isolated Python, and optional shared cache
+export OCSMART_HOME=/path/to/OC-SMART_Python_Linux_v2.2
+export OCSMART_PYTHON=/path/to/ocsmart-environment/bin/python
+export OCSMART_CACHE=/path/to/ocsmart-cache

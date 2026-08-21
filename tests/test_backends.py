@@ -1,9 +1,12 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from s2_water_ac.backends.acolite import AcoliteBackend
 from s2_water_ac.backends.c2rcc import C2rccBackend
+from s2_water_ac.backends.ocsmart import OcsmartBackend
 from s2_water_ac.backends.polymer import PolymerBackend
 from s2_water_ac.errors import ConfigurationError
 from s2_water_ac.products import inspect_product
@@ -47,6 +50,73 @@ class BackendTests(unittest.TestCase):
     def test_macos_partition_gpt_is_rejected(self) -> None:
         status = C2rccBackend().doctor("/usr/sbin/gpt")
         self.assertFalse(status.available)
+
+    def test_c2rcc_resolves_snap_home_on_linux(self) -> None:
+        snap_home = self.root / "esa-snap"
+        gpt = snap_home / "bin" / "gpt"
+        gpt.parent.mkdir(parents=True)
+        gpt.write_text("#!/bin/sh\n", encoding="utf-8")
+        with patch.dict(os.environ, {"SNAP_HOME": str(snap_home)}, clear=True):
+            status = C2rccBackend().doctor()
+        self.assertTrue(status.available)
+        self.assertEqual(status.executable, gpt.resolve())
+
+    def _make_ocsmart(self) -> Path:
+        home = self.root / "ocsmart"
+        (home / "src").mkdir(parents=True)
+        (home / "auxdata").mkdir()
+        launcher = home / "OCSMART.py"
+        launcher.write_text("# test launcher\n", encoding="utf-8")
+        return launcher
+
+    def test_ocsmart_writes_isolated_input_and_uses_fixed_60m(self) -> None:
+        launcher = self._make_ocsmart()
+        output = self.root / "output"
+        prepared = OcsmartBackend().prepare(
+            self.product,
+            self.safe,
+            output,
+            "inland",
+            20,
+            {"l2_prod": "rrs,chl,tsm", "block_size": "2048"},
+            str(launcher),
+            True,
+        )
+        runtime = output / ".ocsmart-runtime"
+        settings = (runtime / "OCSMART_Input.txt").read_text(encoding="utf-8")
+        self.assertIn("l2_prod = rrs,chl,tsm", settings)
+        self.assertIn("block_size = 2048", settings)
+        self.assertEqual(prepared.working_directory, runtime)
+        self.assertEqual(prepared.argv[1], str(launcher.resolve()))
+        self.assertEqual((runtime / "input" / self.safe.name).resolve(), self.safe.resolve())
+        self.assertEqual(
+            (runtime / "auxdata").resolve(),
+            (launcher.parent / "auxdata").resolve(),
+        )
+        self.assertTrue(prepared.output_paths[0].name.endswith("_L2_OCSMART.h5"))
+        self.assertTrue(any("60 m" in note for note in prepared.notes))
+
+    def test_ocsmart_rejects_managed_and_unknown_parameters(self) -> None:
+        launcher = self._make_ocsmart()
+        backend = OcsmartBackend()
+        with self.assertRaises(ConfigurationError):
+            backend.prepare(
+                self.product, self.safe, self.root / "output", "inland", 20,
+                {"l1b_path": "/tmp"}, str(launcher), False,
+            )
+        with self.assertRaises(ConfigurationError):
+            backend.prepare(
+                self.product, self.safe, self.root / "output", "inland", 20,
+                {"not_a_parameter": "1"}, str(launcher), False,
+            )
+
+    def test_ocsmart_doctor_rejects_incomplete_installation(self) -> None:
+        launcher = self.root / "OCSMART.py"
+        launcher.write_text("# incomplete\n", encoding="utf-8")
+        status = OcsmartBackend().doctor(str(launcher))
+        self.assertFalse(status.available)
+        self.assertIn("src", status.detail)
+        self.assertIn("auxdata", status.detail)
 
     def test_polymer_python_uses_driver_and_resolution(self) -> None:
         prepared = PolymerBackend().prepare(

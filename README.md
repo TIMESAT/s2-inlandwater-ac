@@ -8,6 +8,7 @@
 |---|---|---|---|
 | `acolite` | DSF，20 m，生成 `Rrs_*` | 浑浊、富营养化内陆水体；推荐首选 | ACOLITE NetCDF + GeoTIFF |
 | `c2rcc` | `C2X-COMPLEX-Nets`，`outputAsRrs=true` | 光学复杂内陆水体，神经网络反演 | SNAP BEAM-DIMAP |
+| `ocsmart` | `rrs,chl`，MSI 固定 60 m | 沿海/内陆复杂水体，科学机器学习反演 | HDF5 |
 | `polymer` | 20 m，优先读取 SAFE 内嵌 ECMWF | 太阳耀斑明显的水体 | NetCDF |
 
 本项目不捆绑这些外部软件。这样既避免复制数 GB 的 LUT/辅助数据，也保留各处理器各自的许可证、更新方式和可追溯版本。
@@ -65,13 +66,31 @@ s2-water-ac doctor --backend polymer
 
 本工具的 POLYMER driver 暴露 10/20/60 m 分辨率以及内嵌 ECMWF 辅助数据。若只设置 `POLYMER_CLI`，官方简易 CLI 对 MSI 使用默认 60 m，且不接受高级参数。
 
+### OC-SMART
+
+从 [OC-SMART 官方页面](http://www.rtatmocn.com/oc-smart/) 下载 Linux 包，并按包内
+`UserGuide_Python_Linux.pdf` 创建独立 Python 环境。不要把官方程序、神经网络数据或
+Earthdata 凭据提交到本仓库；官方许可仅允许非商业科研使用且禁止向第三方转发软件。
+
+```bash
+export OCSMART_HOME=/path/to/OC-SMART_Python_Linux_v2.2
+export OCSMART_PYTHON=/path/to/ocsmart-environment/bin/python
+export OCSMART_CACHE=/path/to/ocsmart-cache  # 可选，批处理时复用 ancillary 数据
+s2-water-ac doctor --backend ocsmart
+```
+
+OC-SMART 从当前工作目录读取固定名称 `OCSMART_Input.txt`。统一入口会为每景创建隔离的
+`.ocsmart-runtime`，不会改写官方安装目录，也不会把输入目录中的其他 SAFE 一起处理。
+Sentinel-2 在官方 Linux v2.2 中固定以 60 m 处理，因此本后端忽略 `--resolution`。
+
 ## Python 调用方式
 
-三种处理器都可以由 Python 工作流调用，但实现方式不同：
+四种处理器都可以由 Python 工作流调用，但实现方式不同：
 
 - ACOLITE 是原生 Python。官方入口 `acolite_run` 接受 settings 文件或字典；本工具通过其独立 Python 环境启动 `launch_acolite.py`，避免 GDAL、NetCDF 等依赖污染当前项目环境。
 - POLYMER 是 Python/Cython。`polymer_driver.py` 直接调用官方 `run_atm_corr(Level1(...), Level2(...))`，同时暴露 MSI 分辨率、辅助数据和多进程参数。
 - C2RCC 是 SNAP 的 Java GPF Operator，不是纯 Python 包。本工具从 Python 用参数数组启动 SNAP `gpt c2rcc.msi`。SNAP 12+ 也提供 `esa_snappy.GPF.createProduct()`，但它仍依赖完整 SNAP/JVM；批处理时 `gpt` 的进程隔离通常更容易复现和排错。
+- OC-SMART 是独立 Python 程序。统一入口生成官方格式的 `OCSMART_Input.txt`，并在其专用环境中启动 `OCSMART.py`；官方源码和辅助数据仍留在外部安装目录。
 
 因此，用户侧只需要调用本项目的 Python API/CLI，不需要手动编写 shell 脚本；各算法仍建议保留独立运行环境。
 
@@ -119,6 +138,18 @@ s2-water-ac run "$PRODUCT" \
 
 `ancillary=embedded` 使用 SAFE 中的 `AUX_ECMWFT`，无需 NASA Earthdata 登录；可改为 `ancillary=nasa` 使用 POLYMER 的 NASA 辅助数据流程。
 
+运行 OC-SMART：
+
+```bash
+s2-water-ac run "$PRODUCT" \
+  --backend ocsmart \
+  --output ./outputs \
+  --set l2_prod=rrs,chl,tsm
+```
+
+OC-SMART 下载 NASA OB.DAAC 辅助数据前，需要按官方用户指南配置 Earthdata 授权。
+登录信息只能放在权限为 `0600` 的用户级认证文件中，不能写入命令、配置示例或 Git。
+
 ## 批处理
 
 下载目录同时含 `.SAFE` 和同名 `.SAFE.zip` 时，本工具会自动去重并优先使用已解压目录：
@@ -145,6 +176,9 @@ macOS 创建的 Python/conda 环境不能直接复制到 Linux；需要在 Linux
 ACOLITE 环境。完整步骤（包括 ROI 上传、安装、单景验证、全量批处理和断点续跑）见
 [`docs/linux-hpc.md`](docs/linux-hpc.md)。仓库同时提供可直接提交的 Slurm 示例：
 [`examples/run_acolite_vombsjon.slurm`](examples/run_acolite_vombsjon.slurm)。
+
+SNAP C2RCC 和 OC-SMART 的 Linux/HPC 安装、单景验证及 Slurm 示例见
+[`docs/linux-c2rcc-ocsmart.md`](docs/linux-c2rcc-ocsmart.md)。
 
 环境准备完成后，可直接运行：
 
@@ -186,6 +220,7 @@ outputs/
         ├── run.json              # 参数、完整 argv、时间、状态和预期输出
         ├── run.log               # 合并后的 stdout/stderr
         ├── acolite-settings.txt  # 仅 ACOLITE
+        ├── .ocsmart-runtime/     # 仅 OC-SMART；隔离配置、输入链接和缓存入口
         └── ...算法结果...
 ```
 
@@ -195,8 +230,9 @@ outputs/
 
 - `--set KEY=VALUE` 可重复。ACOLITE 参数原样写入 settings；C2RCC 参数转为 SNAP `-PKEY=VALUE`。
 - POLYMER 当前支持 `ancillary`、`multiprocessing`、`blocksize`、`sline`、`eline`、`scol`、`ecol`、`altitude` 和 `use_srf`。
-- `--resolution` 作用于 ACOLITE 和 POLYMER。C2RCC 的输出网格由 SNAP/C2RCC 产品定义。
-- `.SAFE.zip` 可直接交给 ACOLITE/C2RCC；POLYMER 运行时会安全解压到临时目录并在结束后清理。
+- OC-SMART 支持官方输入项 `l2_prod`、角度限制、三种子区域参数和 `block_size`；`l1b_path`/`l2_path` 由统一入口管理，不能覆盖。
+- `--resolution` 作用于 ACOLITE 和 POLYMER。C2RCC 的输出网格由 SNAP/C2RCC 产品定义；OC-SMART v2.2 的 MSI 输出固定为 60 m。
+- `.SAFE.zip` 可直接交给 ACOLITE/C2RCC；POLYMER 和 OC-SMART 运行时会安全解压到临时目录并在结束后清理。
 
 ## 测试
 
@@ -208,4 +244,4 @@ PYTHONPATH=src python3 -m unittest discover -v
 
 ## 科研使用提醒
 
-不同算法输出量纲和归一化约定并不完全相同。ACOLITE 的 `Rrs`、C2RCC 的 `outputAsRrs` 与 POLYMER 的归一化水体反射率在做像元级比较前，仍应检查变量属性、质量标志、波长对应关系和单位。算法选择应通过研究区现场光谱/水质数据验证，而不是仅凭视觉效果决定。
+不同算法输出量纲和归一化约定并不完全相同。ACOLITE 的 `Rrs`、C2RCC 的 `outputAsRrs`、OC-SMART 的 normalized `Rrs` 与 POLYMER 的归一化水体反射率在做像元级比较前，仍应检查变量属性、质量标志、波长对应关系和单位。算法选择应通过研究区现场光谱/水质数据验证，而不是仅凭视觉效果决定。

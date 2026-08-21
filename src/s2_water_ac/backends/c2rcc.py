@@ -17,13 +17,19 @@ class C2rccBackend(Backend):
                 return None
             return resolved
         home = Path.home()
+        snap_home = os.environ.get("SNAP_HOME")
         resolved = first_existing(
             (
                 env_path("SNAP_GPT"),
+                Path(snap_home) / "bin" / "gpt" if snap_home else None,
                 Path("/Applications/snap/bin/gpt"),
                 Path("/Applications/SNAP.app/Contents/MacOS/gpt"),
                 home / "Applications/snap/bin/gpt",
+                home / "esa-snap/bin/gpt",
+                home / "snap/bin/gpt",
                 Path("/opt/snap/bin/gpt"),
+                Path("/opt/esa-snap/bin/gpt"),
+                Path("/usr/local/snap/bin/gpt"),
                 resolve_program("gpt"),
             )
         )

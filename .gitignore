@@ -11,3 +11,5 @@ build/
 dist/
 outputs/
 outputs-vombsjon/
+.netrc
+.urs_cookies

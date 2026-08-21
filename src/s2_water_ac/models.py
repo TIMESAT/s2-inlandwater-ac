@@ -46,3 +46,4 @@ class PreparedCommand:
     generated_files: List[Path] = field(default_factory=list)
     environment: Dict[str, str] = field(default_factory=dict)
     notes: List[str] = field(default_factory=list)
+    working_directory: Optional[Path] = None
