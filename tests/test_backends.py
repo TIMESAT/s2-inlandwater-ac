@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import unittest
@@ -46,6 +47,69 @@ class BackendTests(unittest.TestCase):
         self.assertIn("-PoutputAsRrs=true", prepared.argv)
         source = next(value for value in prepared.argv if value.startswith("-SsourceProduct="))
         self.assertTrue(source.endswith("/MTD_MSIL1C.xml"))
+
+    def test_c2rcc_applies_roi_after_atmospheric_correction(self) -> None:
+        polygon = self.root / "lake.geojson"
+        polygon.write_text(
+            json.dumps(
+                {
+                    "type": "Feature",
+                    "properties": {},
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [
+                            [
+                                [13.5, 55.6],
+                                [13.7, 55.6],
+                                [13.7, 55.8],
+                                [13.5, 55.8],
+                                [13.5, 55.6],
+                            ]
+                        ],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        output = self.root / "output"
+        prepared = C2rccBackend().prepare(
+            self.product,
+            self.safe,
+            output,
+            "inland",
+            20,
+            {"polygon": str(polygon), "polygon_clip": "true"},
+            self.executable,
+            True,
+        )
+        graph_path = output / "c2rcc-roi.xml"
+        graph = graph_path.read_text(encoding="utf-8")
+        self.assertEqual(prepared.argv[1], str(graph_path))
+        self.assertLess(graph.index("<operator>c2rcc.msi</operator>"), graph.index("<operator>Subset</operator>"))
+        self.assertIn("<geoRegion>POLYGON ((13.5 55.6", graph)
+        self.assertIn("<netSet>C2X-COMPLEX-Nets</netSet>", graph)
+        self.assertEqual(prepared.generated_files, [graph_path])
+        self.assertTrue(any("原始 L1C" in note for note in prepared.notes))
+
+    def test_c2rcc_roi_dry_run_does_not_write_graph(self) -> None:
+        polygon = self.root / "lake.geojson"
+        polygon.write_text(
+            '{"type":"Polygon","coordinates":[[[13,55],[14,55],[14,56],[13,55]]]}',
+            encoding="utf-8",
+        )
+        output = self.root / "output"
+        prepared = C2rccBackend().prepare(
+            self.product,
+            self.safe,
+            output,
+            "inland",
+            20,
+            {"polygon": str(polygon)},
+            self.executable,
+            False,
+        )
+        self.assertFalse(output.exists())
+        self.assertEqual(prepared.generated_files, [output / "c2rcc-roi.xml"])
 
     def test_macos_partition_gpt_is_rejected(self) -> None:
         status = C2rccBackend().doctor("/usr/sbin/gpt")

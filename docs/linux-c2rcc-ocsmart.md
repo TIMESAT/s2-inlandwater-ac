@@ -40,7 +40,7 @@ chmod +x /path/to/esa-snap-installer.sh
 安装时必须包含 Optical/Sentinel-3 Toolbox，因为 `c2rcc.msi` 由相关模块提供。设置：
 
 ```bash
-export SNAP_HOME="$APP/.external/esa-snap"
+export SNAP_HOME="$BASE/apps/esa-snap-10"
 export SNAP_GPT="$SNAP_HOME/bin/gpt"
 
 "$SNAP_GPT" -h
@@ -60,12 +60,19 @@ PRODUCT=$(find "$DATA" -maxdepth 1 -type d -name '*.SAFE' | sort | head -n 1)
 "$RUNNER" run "$PRODUCT" \
   --backend c2rcc \
   --profile inland \
-  --output "$BASE/C2RCC_VOMBSJON"
+  --output "$BASE/C2RCC_VOMBSJON" \
+  --set "polygon=$BASE/vombsjon.geojson" \
+  --set polygon_clip=true
 ```
 
 `inland` 默认使用 `C2X-COMPLEX-Nets`、`outputAsRrs=true` 和
 `outputUncertainties=true`。结果保留为 BEAM-DIMAP（`.dim` + `.data/`），避免部分
 SNAP/NetCDF 组合在大型元数据产品上出现原生崩溃。
+
+为避免预裁剪破坏 C2RCC 所依赖的 Sentinel-2 L1C 元数据，带 `polygon` 时统一入口先在
+原始产品上运行 C2RCC，再用同一个 GeoJSON 将结果裁到 ROI 的外接范围。SNAP 原生栅格
+仍为矩形；多边形外的像元在后续标准化或统计阶段使用同一 GeoJSON 精确掩膜。生成的
+`c2rcc-roi.xml` 会随 `run.json` 一起保留，记录实际处理顺序和 WKT 区域。
 
 ### 2.3 批处理与 Slurm
 
@@ -73,7 +80,9 @@ SNAP/NetCDF 组合在大型元数据产品上出现原生崩溃。
 "$RUNNER" batch "$DATA" \
   --backend c2rcc \
   --profile inland \
-  --output "$BASE/C2RCC_VOMBSJON"
+  --output "$BASE/C2RCC_VOMBSJON" \
+  --set "polygon=$BASE/vombsjon.geojson" \
+  --set polygon_clip=true
 ```
 
 也可直接提交仓库示例：

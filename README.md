@@ -121,9 +121,14 @@ s2-water-ac run "$PRODUCT" \
 s2-water-ac run "$PRODUCT" \
   --backend c2rcc \
   --output ./outputs \
+  --set polygon=/path/to/roi.geojson \
+  --set polygon_clip=true \
   --set netSet=C2X-COMPLEX-Nets \
   --set outputUncertainties=true
 ```
+
+C2RCC 先在完整 L1C 产品上执行，再将结果裁到 GeoJSON 的外接范围，避免预裁剪破坏
+处理器依赖的 Sentinel-2 元数据。精确的多边形像元掩膜应在标准化或统计阶段应用。
 
 运行 POLYMER：
 
