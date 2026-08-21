@@ -111,7 +111,6 @@ def _boolean(value: str, name: str) -> bool:
 
 def _write_roi_graph(
     path: Path,
-    source: Path,
     parameters: Dict[str, str],
     geo_region: str,
 ) -> None:
@@ -121,7 +120,7 @@ def _write_roi_graph(
     c2rcc = ET.SubElement(graph, "node", {"id": "c2rcc"})
     ET.SubElement(c2rcc, "operator").text = "c2rcc.msi"
     sources = ET.SubElement(c2rcc, "sources")
-    ET.SubElement(sources, "sourceProduct").text = str(source)
+    ET.SubElement(sources, "sourceProduct").text = "${sourceProduct}"
     processor_parameters = ET.SubElement(c2rcc, "parameters")
     for key, value in parameters.items():
         ET.SubElement(processor_parameters, key).text = value
@@ -233,8 +232,16 @@ class C2rccBackend(Backend):
             graph_path = output_dir / "c2rcc-roi.xml"
             if write_files:
                 output_dir.mkdir(parents=True, exist_ok=True)
-                _write_roi_graph(graph_path, source, defaults, geo_region)
-            argv = [str(gpt), str(graph_path), "-t", str(target), "-f", "BEAM-DIMAP"]
+                _write_roi_graph(graph_path, defaults, geo_region)
+            argv = [
+                str(gpt),
+                str(graph_path),
+                "-SsourceProduct={}".format(source),
+                "-t",
+                str(target),
+                "-f",
+                "BEAM-DIMAP",
+            ]
             generated_files.append(graph_path)
             notes.extend(
                 [
