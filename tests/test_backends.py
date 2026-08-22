@@ -58,7 +58,7 @@ class BackendTests(unittest.TestCase):
         source = next(value for value in prepared.argv if value.startswith("-SsourceProduct="))
         self.assertTrue(source.endswith("/MTD_MSIL1C.xml"))
 
-    def test_c2rcc_applies_roi_after_atmospheric_correction(self) -> None:
+    def test_c2rcc_applies_roi_before_atmospheric_correction(self) -> None:
         polygon = self.root / "lake.geojson"
         polygon.write_text(
             json.dumps(
@@ -97,20 +97,21 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(prepared.argv[1], str(graph_path))
         self.assertLess(
             graph.index("<operator>S2Resampling</operator>"),
-            graph.index("<operator>c2rcc.msi</operator>"),
-        )
-        self.assertLess(
-            graph.index("<operator>c2rcc.msi</operator>"),
             graph.index("<operator>Subset</operator>"),
         )
+        self.assertLess(
+            graph.index("<operator>Subset</operator>"),
+            graph.index("<operator>c2rcc.msi</operator>"),
+        )
         self.assertIn("<sourceProduct>${sourceProduct}</sourceProduct>", graph)
-        self.assertIn('<sourceProduct refid="s2-resampling"', graph)
+        self.assertIn('<sourceProduct refid="s2-resampling" />', graph)
+        self.assertIn('<sourceProduct refid="subset-roi" />', graph)
         source = next(value for value in prepared.argv if value.startswith("-SsourceProduct="))
         self.assertTrue(source.endswith("/MTD_MSIL1C.xml"))
         self.assertIn("<geoRegion>POLYGON ((13.5 55.6", graph)
         self.assertIn("<netSet>C2X-COMPLEX-Nets</netSet>", graph)
         self.assertEqual(prepared.generated_files, [graph_path])
-        self.assertTrue(any("统一 L1C 栅格" in note for note in prepared.notes))
+        self.assertTrue(any("减少处理像元" in note for note in prepared.notes))
 
     def test_c2rcc_roi_dry_run_does_not_write_graph(self) -> None:
         polygon = self.root / "lake.geojson"

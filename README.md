@@ -128,8 +128,9 @@ s2-water-ac run "$PRODUCT" \
   --set outputUncertainties=true
 ```
 
-C2RCC graph 先用官方 `S2Resampling` 将多分辨率 L1C 统一到指定分辨率，再执行
-C2RCC，最后裁到 GeoJSON 的外接范围。精确的多边形像元掩膜应在标准化或统计阶段应用。
+C2RCC graph 先用官方 `S2Resampling` 将多分辨率 L1C 统一到指定分辨率，再裁到
+GeoJSON 的外接范围，然后只对该范围执行 C2RCC，以避免处理整幅 Sentinel-2 瓦片。
+精确的多边形像元掩膜应在标准化或统计阶段应用。
 
 运行 POLYMER：
 

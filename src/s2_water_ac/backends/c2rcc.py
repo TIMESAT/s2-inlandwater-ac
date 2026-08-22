@@ -129,22 +129,24 @@ def _write_roi_graph(
     ET.SubElement(resampling_parameters, "flagDownsampling").text = "First"
     ET.SubElement(resampling_parameters, "resampleOnPyramidLevels").text = "false"
 
-    c2rcc = ET.SubElement(graph, "node", {"id": "c2rcc"})
-    ET.SubElement(c2rcc, "operator").text = "c2rcc.msi"
-    sources = ET.SubElement(c2rcc, "sources")
-    ET.SubElement(sources, "sourceProduct", {"refid": "s2-resampling"})
-    processor_parameters = ET.SubElement(c2rcc, "parameters")
-    for key, value in parameters.items():
-        ET.SubElement(processor_parameters, key).text = value
-
+    c2rcc_source = "s2-resampling"
     if geo_region is not None:
         subset = ET.SubElement(graph, "node", {"id": "subset-roi"})
         ET.SubElement(subset, "operator").text = "Subset"
         subset_sources = ET.SubElement(subset, "sources")
-        ET.SubElement(subset_sources, "sourceProduct", {"refid": "c2rcc"})
+        ET.SubElement(subset_sources, "sourceProduct", {"refid": "s2-resampling"})
         subset_parameters = ET.SubElement(subset, "parameters")
         ET.SubElement(subset_parameters, "geoRegion").text = geo_region
         ET.SubElement(subset_parameters, "copyMetadata").text = "true"
+        c2rcc_source = "subset-roi"
+
+    c2rcc = ET.SubElement(graph, "node", {"id": "c2rcc"})
+    ET.SubElement(c2rcc, "operator").text = "c2rcc.msi"
+    sources = ET.SubElement(c2rcc, "sources")
+    ET.SubElement(sources, "sourceProduct", {"refid": c2rcc_source})
+    processor_parameters = ET.SubElement(c2rcc, "parameters")
+    for key, value in parameters.items():
+        ET.SubElement(processor_parameters, key).text = value
 
     ET.indent(graph, space="  ")
     path.write_text(
@@ -246,7 +248,7 @@ class C2rccBackend(Backend):
             geo_region = _geojson_wkt(polygon)
             notes.extend(
                 [
-                    "先统一 L1C 栅格并执行 C2RCC，再使用 polygon 裁到同一 ROI 的外接范围。",
+                    "先统一 L1C 栅格并使用 polygon 裁到 ROI 外接范围，再执行 C2RCC，以减少处理像元。",
                     "SNAP 原生栅格保持矩形；精确多边形外像元需在标准化/分析阶段用同一 GeoJSON 掩膜。",
                 ]
             )
