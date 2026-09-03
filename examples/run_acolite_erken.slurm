@@ -65,4 +65,4 @@ mkdir -p "$OUT"
   --output "$OUT" \
   --set "polygon=$ROI" \
   --set polygon_clip=True \
-  --set ancillary_data=False
+  --set ancillary_data=True

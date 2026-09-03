@@ -59,7 +59,7 @@ test -n "$PRODUCT"
   --output "$OUT" \
   --set "polygon=$ROI" \
   --set polygon_clip=True \
-  --set ancillary_data=False
+  --set ancillary_data=True
 ```
 
 成功后应在 `$OUT/<product-id>/acolite/` 看到 `run.json`、`run.log`、
@@ -92,8 +92,9 @@ tail -f "$BASE"/acolite-erken-<job-id>.log
 ```
 
 已有成功 `run.json` 的景会自动跳过，因此中断后可原样重新提交以继续。断点续跑时
-不要添加 `--force`。脚本默认 `ancillary_data=False`；如果服务器已配置 NASA
-Earthdata 凭据并需要逐日辅助数据，可以删除该参数。
+不要添加 `--force`。脚本默认 `ancillary_data=True`，正式批处理前需在权限为 `0600`
+的用户级 `~/.netrc` 中配置 ACOLITE 所需的 `machine earthdata` 凭据。若明确接受默认
+臭氧、水汽和气压参数，才将它改成 `False`。
 
 ## ROI 解析错误
 
