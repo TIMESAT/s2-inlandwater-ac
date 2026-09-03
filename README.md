@@ -173,6 +173,11 @@ Python and conda environments created on macOS cannot be copied directly to Linu
 
 For Linux/HPC installation, single-scene validation, and Slurm examples for SNAP C2RCC and OC-SMART, see [`docs/linux-c2rcc-ocsmart.md`](docs/linux-c2rcc-ocsmart.md).
 
+For Erken (`T34VCM`), use the dedicated ACOLITE guide
+[`docs/linux-hpc-erken.md`](docs/linux-hpc-erken.md) and Slurm script
+[`examples/run_acolite_erken.slurm`](examples/run_acolite_erken.slurm). The workflow first validates
+one L1C scene against the Erken lake + 5 km ROI, then runs the resumable batch job.
+
 Once the environment is ready, run:
 
 ```bash
