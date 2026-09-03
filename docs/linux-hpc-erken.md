@@ -11,7 +11,7 @@ Erken 使用 Sentinel-2 L1C 瓦片 `T34VCM`。以下命令沿用
 export BASE=/projects/eko/fs7/pers/ZC/TWIN_water
 export APP="$BASE/s2-inlandwater-ac"
 export DATA="$BASE/S2L1C/T34VCM"
-export ROI="$BASE/erken.geojson"
+export ROI="$APP/examples/erken-processing-roi-5km.geojson"
 export OUT="$BASE/ACOLITE_ERKEN"
 export ACENV="$APP/.external/envs/acolite"
 ```
@@ -19,12 +19,11 @@ export ACENV="$APP/.external/envs/acolite"
 `DATA` 必须只包含 L1C `.SAFE` 目录或 `.SAFE.zip` 文件。若下载位置不同，修改
 `DATA` 即可，不要把 L2A 产品混入该目录。
 
-从 Mac 上传已配置的 Erken 湖区 + 5 km ROI：
+仓库包含一个仅有 Erken 湖区 + 5 km 处理范围的 GeoJSON。运行 ACOLITE 前先验证：
 
 ```bash
-scp \
-  /Users/zzcai/Documents/GitHub/s2-l1c-downloader/config/erken.geojson \
-  <user>@<linux-host>:/projects/eko/fs7/pers/ZC/TWIN_water/erken.geojson
+"$ACENV/bin/python" -m json.tool "$ROI" >/dev/null
+head -n 3 "$ROI"
 ```
 
 ## 2. 检查环境和数据
@@ -95,3 +94,18 @@ tail -f "$BASE"/acolite-erken-<job-id>.log
 已有成功 `run.json` 的景会自动跳过，因此中断后可原样重新提交以继续。断点续跑时
 不要添加 `--force`。脚本默认 `ancillary_data=False`；如果服务器已配置 NASA
 Earthdata 凭据并需要逐日辅助数据，可以删除该参数。
+
+## ROI 解析错误
+
+若日志出现 `OGR Error: Unsupported geometry type` 或 `JSON parsing error`，先停止该次
+处理。它表示服务器上的 ROI 不是可读的 GeoJSON，不应继续生成结果。检查：
+
+```bash
+printf 'ROI=<%s>\n' "$ROI"
+ls -lh "$ROI"
+head -c 80 "$ROI"; printf '\n'
+"$ACENV/bin/python" -m json.tool "$ROI" >/dev/null
+```
+
+最后一条命令必须成功，且文件开头应为 `{`。修复 ROI 后应使用新的空测试输出目录，
+避免与失败运行留下的文件混合。

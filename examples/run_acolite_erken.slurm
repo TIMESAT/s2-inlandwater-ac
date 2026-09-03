@@ -10,7 +10,7 @@ set -euo pipefail
 BASE="${TWIN_WATER_BASE:-/projects/eko/fs7/pers/ZC/TWIN_water}"
 APP="${S2_WATER_AC_HOME:-${BASE}/s2-inlandwater-ac}"
 DATA="${S2_L1C_DIR:-${BASE}/S2L1C/T34VCM}"
-ROI="${ERKEN_ROI:-${BASE}/erken.geojson}"
+ROI="${ERKEN_ROI:-${APP}/examples/erken-processing-roi-5km.geojson}"
 OUT="${S2_AC_OUTPUT:-${BASE}/ACOLITE_ERKEN}"
 ACENV="${ACOLITE_ENV:-${APP}/.external/envs/acolite}"
 
@@ -35,6 +35,26 @@ if [[ ! -f "$ROI" ]]; then
   echo "Missing Erken ROI: $ROI" >&2
   exit 2
 fi
+
+"$ACOLITE_PYTHON" - "$ROI" <<'PY'
+import sys
+from osgeo import ogr
+
+path = sys.argv[1]
+dataset = ogr.Open(path)
+if dataset is None:
+    raise SystemExit("Invalid or unreadable Erken ROI: {}".format(path))
+layer = dataset.GetLayer()
+if layer is None or layer.GetFeatureCount() != 1:
+    raise SystemExit("Erken ROI must contain exactly one polygon feature: {}".format(path))
+feature = layer.GetNextFeature()
+geometry = feature.GetGeometryRef() if feature is not None else None
+if geometry is None or geometry.GetGeometryName() not in {"POLYGON", "MULTIPOLYGON"}:
+    raise SystemExit("Erken ROI feature is not a polygon: {}".format(path))
+if not geometry.IsValid():
+    raise SystemExit("Erken ROI polygon is invalid: {}".format(path))
+print("Validated Erken ROI: {} ({})".format(path, geometry.GetGeometryName()))
+PY
 
 mkdir -p "$OUT"
 
